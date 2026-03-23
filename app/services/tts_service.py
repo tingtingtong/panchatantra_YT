@@ -25,7 +25,13 @@ class TTSResult:
 
 class BaseTTSProvider(ABC):
     @abstractmethod
-    def synthesize(self, text: str, output_path: Path, language: str) -> TTSResult:
+    def synthesize(
+        self,
+        text: str,
+        output_path: Path,
+        language: str,
+        target_duration_seconds: float | None = None,
+    ) -> TTSResult:
         raise NotImplementedError
 
 
@@ -33,7 +39,13 @@ class ElevenLabsTTSProvider(BaseTTSProvider):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def synthesize(self, text: str, output_path: Path, language: str) -> TTSResult:
+    def synthesize(
+        self,
+        text: str,
+        output_path: Path,
+        language: str,
+        target_duration_seconds: float | None = None,
+    ) -> TTSResult:
         def _call() -> TTSResult:
             response = httpx.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{self.settings.elevenlabs_voice_id}",
@@ -64,10 +76,16 @@ class ElevenLabsTTSProvider(BaseTTSProvider):
 
 
 class LocalPlaceholderTTSProvider(BaseTTSProvider):
-    def synthesize(self, text: str, output_path: Path, language: str) -> TTSResult:
+    def synthesize(
+        self,
+        text: str,
+        output_path: Path,
+        language: str,
+        target_duration_seconds: float | None = None,
+    ) -> TTSResult:
         sample_rate = 22050
         words = max(len(text.split()), 1)
-        duration_seconds = max(words / 2.5, 4.0)
+        duration_seconds = max(target_duration_seconds or 0, words / 2.5, 4.0)
         total_frames = int(sample_rate * duration_seconds)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -96,5 +114,11 @@ class TTSService:
         else:
             self.provider = LocalPlaceholderTTSProvider()
 
-    def synthesize(self, text: str, output_path: Path, language: str) -> TTSResult:
-        return self.provider.synthesize(text, output_path, language)
+    def synthesize(
+        self,
+        text: str,
+        output_path: Path,
+        language: str,
+        target_duration_seconds: float | None = None,
+    ) -> TTSResult:
+        return self.provider.synthesize(text, output_path, language, target_duration_seconds)

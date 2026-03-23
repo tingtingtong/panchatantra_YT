@@ -114,7 +114,12 @@ class PipelineService:
                     raise ValueError(f"Asset {asset.id} has not been generated yet")
                 bundle = StoryAssetBundle.model_validate(json.loads(Path(asset.asset_manifest_path).read_text(encoding="utf-8")))
                 audio_path = self._audio_path(bundle)
-                tts_result = self.tts_service.synthesize(bundle.script, audio_path, bundle.language)
+                tts_result = self.tts_service.synthesize(
+                    bundle.script,
+                    audio_path,
+                    bundle.language,
+                    target_duration_seconds=bundle.target_duration_seconds,
+                )
                 scaled_subtitles = self.subtitle_service.scale_lines(bundle.subtitles, tts_result.duration_seconds)
                 subtitle_path = self._subtitle_path(bundle)
                 FFmpegRenderer.write_subtitle_file(scaled_subtitles, subtitle_path)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import shutil
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -107,10 +108,39 @@ class Settings(BaseSettings):
         ):
             path.mkdir(parents=True, exist_ok=True)
 
+    def resolve_binaries(self) -> None:
+        self.ffmpeg_binary = self._resolve_binary(self.ffmpeg_binary, "ffmpeg.exe")
+        self.ffprobe_binary = self._resolve_binary(self.ffprobe_binary, "ffprobe.exe")
+
+    @staticmethod
+    def _resolve_binary(configured_value: str, windows_binary_name: str) -> str:
+        found = shutil.which(configured_value)
+        if found:
+            return found
+        try:
+            if Path(configured_value).exists():
+                return configured_value
+        except PermissionError:
+            return configured_value
+
+        winget_root = Path.home() / "AppData" / "Local" / "Microsoft" / "WinGet" / "Packages"
+        if winget_root.exists():
+            for directory in winget_root.glob("Gyan.FFmpeg*"):
+                try:
+                    matches = list(directory.rglob(windows_binary_name))
+                except PermissionError:
+                    candidate = directory / "ffmpeg-8.1-full_build" / "bin" / windows_binary_name
+                    if candidate.exists():
+                        return str(candidate)
+                    continue
+                if matches:
+                    return str(matches[0])
+        return configured_value
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     settings = Settings()
     settings.ensure_directories()
+    settings.resolve_binaries()
     return settings
-
