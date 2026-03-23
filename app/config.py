@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     openai_video_model: str = "sora-2"
+    openai_image_model: str = "gpt-image-1"
+    openai_image_quality: str = "high"
+    openai_image_style: str = "vivid"
+    use_openai_video_generation: bool = False
+    use_openai_image_generation: bool = True
     elevenlabs_api_key: str | None = None
     elevenlabs_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
 

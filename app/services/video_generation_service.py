@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import math
 import random
 import subprocess
 import textwrap
@@ -18,6 +17,23 @@ from app.schemas import PromptSpec
 from app.utils import retry_operation
 
 logger = logging.getLogger(__name__)
+
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover
+    OpenAI = None  # type: ignore[assignment]
+
+
+class BaseImageProvider(ABC):
+    @abstractmethod
+    def generate_scene_image(
+        self,
+        *,
+        prompt: PromptSpec,
+        output_path: Path,
+        resolution: tuple[int, int],
+    ) -> Path:
+        raise NotImplementedError
 
 
 class BaseVideoProvider(ABC):
@@ -94,9 +110,97 @@ class OpenAIVideoProvider(BaseVideoProvider):
         )
 
 
-class PlaceholderVideoProvider(BaseVideoProvider):
+class OpenAIImageProvider(BaseImageProvider):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.client = OpenAI(api_key=settings.openai_api_key) if OpenAI and settings.openai_api_key else None
+
+    def generate_scene_image(
+        self,
+        *,
+        prompt: PromptSpec,
+        output_path: Path,
+        resolution: tuple[int, int],
+    ) -> Path:
+        if not self.client:
+            raise RuntimeError("OpenAI client is not configured for image generation.")
+
+        rendered_prompt = self.compose_prompt(prompt, resolution)
+        size = self._image_size(resolution)
+
+        def _call() -> Path:
+            response = self.client.images.generate(
+                model=self.settings.openai_image_model,
+                prompt=rendered_prompt,
+                size=size,
+                quality=self.settings.openai_image_quality,
+                style=self.settings.openai_image_style,
+                response_format="b64_json",
+                output_format="png",
+            )
+            if not response.data:
+                raise RuntimeError("OpenAI image response did not contain any image data.")
+            image_data = response.data[0].b64_json
+            if not image_data:
+                raise RuntimeError("OpenAI image response was missing b64_json data.")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(base64.b64decode(image_data))
+            return output_path
+
+        return retry_operation(
+            _call,
+            max_attempts=self.settings.max_retry_attempts,
+            base_delay_seconds=self.settings.retry_base_delay_seconds,
+            logger=logger,
+            operation_name="openai_image_generation",
+        )
+
+    @staticmethod
+    def _image_size(resolution: tuple[int, int]) -> str:
+        return "1024x1536" if resolution[1] > resolution[0] else "1536x1024"
+
+    @staticmethod
+    def compose_prompt(prompt: PromptSpec, resolution: tuple[int, int]) -> str:
+        orientation = (
+            "vertical 9:16 composition with strong foreground/background separation"
+            if resolution[1] > resolution[0]
+            else "horizontal 16:9 cinematic composition with rich environmental depth"
+        )
+        continuity = (
+            "Character continuity rules: if a lion appears, render a majestic golden Indian lion with a dark chestnut mane, "
+            "expressive amber eyes, and premium animated-film proportions. If a rabbit or hare appears, render a small ivory rabbit "
+            "with pink inner ears, bright alert eyes, and a calm clever expression."
+        )
+        safety = (
+            "Child-safe Panchatantra animated film keyframe. No gore, no horror, no text, no subtitles, no logos, no watermark, "
+            "no UI, no split panels, no photoreal humans."
+        )
+        style = (
+            "Indian forest aesthetic, warm cinematic lighting, premium family-animation look, detailed foliage, atmospheric depth, "
+            "clear silhouettes, emotionally readable staging."
+        )
+        return (
+            f"{style} {orientation}. {continuity} {safety} "
+            f"Scene objective: {prompt.prompt}"
+        )
+
+
+class PlaceholderImageProvider(BaseImageProvider):
+    def generate_scene_image(
+        self,
+        *,
+        prompt: PromptSpec,
+        output_path: Path,
+        resolution: tuple[int, int],
+    ) -> Path:
+        Illustrator().render_scene_image(output_path, prompt.prompt, resolution)
+        return output_path
+
+
+class ImageAnimatedVideoProvider(BaseVideoProvider):
+    def __init__(self, settings: Settings, image_provider: BaseImageProvider) -> None:
+        self.settings = settings
+        self.image_provider = image_provider
 
     def generate_scene_clip(
         self,
@@ -105,12 +209,53 @@ class PlaceholderVideoProvider(BaseVideoProvider):
         output_path: Path,
         resolution: tuple[int, int],
     ) -> Path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         image_path = output_path.with_suffix(".png")
-        self.render_scene_image(image_path, prompt.prompt, resolution)
+        self.image_provider.generate_scene_image(prompt=prompt, output_path=image_path, resolution=resolution)
         self._image_to_video(image_path, output_path, resolution, prompt.duration_seconds)
         return output_path
 
+    def _image_to_video(
+        self,
+        image_path: Path,
+        output_path: Path,
+        resolution: tuple[int, int],
+        duration_seconds: float,
+    ) -> None:
+        frames = max(int(round(duration_seconds * 24)), 24)
+        zoom_speed = "0.0012" if resolution[1] > resolution[0] else "0.0008"
+        filter_chain = (
+            f"scale={resolution[0]}:{resolution[1]},"
+            f"zoompan=z='min(zoom+{zoom_speed},1.14)':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            f"d={frames}:s={resolution[0]}x{resolution[1]}:fps=24,"
+            "eq=saturation=1.08:contrast=1.03,"
+            "format=yuv420p"
+        )
+        command = [
+            self.settings.ffmpeg_binary,
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(image_path),
+            "-vf",
+            filter_chain,
+            "-t",
+            str(max(duration_seconds, 1.5)),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(output_path),
+        ]
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+        except FileNotFoundError as exc:
+            raise RuntimeError("FFmpeg is required for scene clip generation.") from exc
+
+
+class Illustrator:
     def render_scene_image(self, image_path: Path, prompt_text: str, resolution: tuple[int, int]) -> None:
         width, height = resolution
         seed = sum(ord(char) for char in prompt_text)
@@ -154,45 +299,6 @@ class PlaceholderVideoProvider(BaseVideoProvider):
             draw.text((int(width * 0.13), y), line, fill=(255, 246, 225), font=title_font)
             y += int(title_font.size * 1.35)
         canvas.convert("RGB").save(image_path)
-
-    def _image_to_video(
-        self,
-        image_path: Path,
-        output_path: Path,
-        resolution: tuple[int, int],
-        duration_seconds: float,
-    ) -> None:
-        frames = max(int(round(duration_seconds * 24)), 24)
-        zoom_speed = "0.0011" if resolution[1] > resolution[0] else "0.0007"
-        filter_chain = (
-            f"scale={resolution[0]}:{resolution[1]},"
-            f"zoompan=z='min(zoom+{zoom_speed},1.12)':"
-            "x='iw/2-(iw/zoom/2)':"
-            "y='ih/2-(ih/zoom/2)':"
-            f"d={frames}:s={resolution[0]}x{resolution[1]}:fps=24,"
-            "format=yuv420p"
-        )
-        command = [
-            self.settings.ffmpeg_binary,
-            "-y",
-            "-loop",
-            "1",
-            "-i",
-            str(image_path),
-            "-vf",
-            filter_chain,
-            "-t",
-            str(max(duration_seconds, 1.5)),
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            str(output_path),
-        ]
-        try:
-            subprocess.run(command, check=True, capture_output=True)
-        except FileNotFoundError as exc:
-            raise RuntimeError("FFmpeg is required for placeholder scene clip generation.") from exc
 
     @staticmethod
     def _pick_palette(prompt_text: str) -> dict[str, tuple[int, int, int]]:
@@ -506,10 +612,15 @@ class PlaceholderVideoProvider(BaseVideoProvider):
 class VideoGenerationService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.placeholder_provider = PlaceholderVideoProvider(settings)
-        self.provider: BaseVideoProvider = (
-            OpenAIVideoProvider(settings) if settings.openai_api_key else self.placeholder_provider
+        self.illustrator = Illustrator()
+        self.placeholder_image_provider = PlaceholderImageProvider()
+        self.image_provider: BaseImageProvider = (
+            OpenAIImageProvider(settings)
+            if settings.openai_api_key and settings.use_openai_image_generation
+            else self.placeholder_image_provider
         )
+        self.animated_image_provider = ImageAnimatedVideoProvider(settings, self.image_provider)
+        self.openai_video_provider = OpenAIVideoProvider(settings)
 
     def generate_scene_clip(
         self,
@@ -518,8 +629,22 @@ class VideoGenerationService:
         output_path: Path,
         resolution: tuple[int, int],
     ) -> Path:
+        if self.settings.openai_api_key and self.settings.use_openai_video_generation:
+            try:
+                return self.openai_video_provider.generate_scene_clip(
+                    prompt=prompt,
+                    output_path=output_path,
+                    resolution=resolution,
+                )
+            except Exception as exc:
+                logger.warning("OpenAI video generation failed, falling back to animated scene images: %s", exc)
         try:
-            return self.provider.generate_scene_clip(prompt=prompt, output_path=output_path, resolution=resolution)
+            return self.animated_image_provider.generate_scene_clip(
+                prompt=prompt,
+                output_path=output_path,
+                resolution=resolution,
+            )
         except Exception as exc:
-            logger.warning("Primary video provider failed, using placeholder clips instead: %s", exc)
-            return self.placeholder_provider.generate_scene_clip(prompt=prompt, output_path=output_path, resolution=resolution)
+            logger.warning("Primary image provider failed, falling back to local illustrated scenes: %s", exc)
+            fallback_provider = ImageAnimatedVideoProvider(self.settings, self.placeholder_image_provider)
+            return fallback_provider.generate_scene_clip(prompt=prompt, output_path=output_path, resolution=resolution)
