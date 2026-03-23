@@ -1,0 +1,122 @@
+[
+  {
+    "id": "lion-rabbit",
+    "title": "The Lion and the Clever Rabbit",
+    "moral": "Intelligence and patience can defeat brute strength.",
+    "source_summary": "A tyrannical lion makes the forest animals send him one victim every day. A small rabbit arrives late, claims another lion challenged the king of the forest, and leads the lion to a deep well where he leaps at his own reflection.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "monkey-crocodile",
+    "title": "The Monkey and the Crocodile",
+    "moral": "Presence of mind can save you from betrayal.",
+    "source_summary": "A crocodile befriends a monkey who shares sweet fruits from a riverside tree. Pressured by his wife, the crocodile tries to take the monkey's heart, but the monkey cleverly tricks him and escapes.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "crow-serpent",
+    "title": "The Crow and the Serpent",
+    "moral": "Strategy can overcome a stronger enemy.",
+    "source_summary": "A serpent keeps eating the eggs of a crow pair. Unable to defeat it directly, the crows steal a royal necklace and drop it into the serpent's hole so palace guards destroy the snake while recovering the jewel.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "blue-jackal",
+    "title": "The Blue Jackal",
+    "moral": "False prestige collapses when truth appears.",
+    "source_summary": "A jackal falls into a vat of blue dye and returns to the forest looking strange and regal. He declares himself divinely chosen and rules over the animals until he forgets himself and howls like an ordinary jackal.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "talkative-tortoise",
+    "title": "The Talkative Tortoise",
+    "moral": "Knowing when to stay silent protects you from ruin.",
+    "source_summary": "Two swans offer to carry their tortoise friend to a new lake by holding a stick between them while he bites it. They warn him not to speak, but he answers taunts from below, falls, and loses his chance to survive.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "dove-hunter",
+    "title": "The Doves and the Hunter",
+    "moral": "Unity can lift a group out of danger.",
+    "source_summary": "A flock of doves lands on grains scattered by a hunter and gets trapped in a net. Their leader tells them to rise together carrying the net, and a mouse friend later gnaws the threads to free them all.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "heron-crab",
+    "title": "The Heron and the Crab",
+    "moral": "Question sweet words when they hide selfish intent.",
+    "source_summary": "A hungry heron pretends to help fish escape a drying pond by carrying them to a better lake, but actually eats them. A crab asks to be taken too, sees the bones, and ends the heron's deception.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "three-fish",
+    "title": "The Three Fish",
+    "moral": "Preparation beats panic when danger approaches.",
+    "source_summary": "Three fish respond differently after hearing fishermen discuss their pond. One leaves immediately, another improvises when the net arrives, and the third delays too long and suffers for it.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "elephant-hare",
+    "title": "The Elephants and the Hares",
+    "moral": "Wisdom can protect the weak from the mighty.",
+    "source_summary": "A herd of elephants tramples a rabbit colony while searching for water. A clever hare claims to speak for the Moon and leads the elephant king to a moonlit pond, convincing him to leave the rabbits in peace.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "brahmin-thieves",
+    "title": "The Brahmin and the Three Thieves",
+    "moral": "Repeated lies can mislead the careless mind.",
+    "source_summary": "A brahmin carries a goat home after receiving it as a gift. Three thieves separately tell him he is carrying a dog, then a calf, then a donkey, until confusion makes him abandon the goat, which the thieves steal.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "cat-partridge-rabbit",
+    "title": "The Cat, the Partridge, and the Rabbit",
+    "moral": "Do not trust a wicked judge disguised as a saint.",
+    "source_summary": "A rabbit and a partridge argue over a nesting place and seek judgment from an old cat who pretends to be pious and harmless. When they approach for justice, the cat seizes both of them.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  },
+  {
+    "id": "goose-golden-eggs",
+    "title": "The Goose with the Golden Eggs",
+    "moral": "Greed destroys the steady source of prosperity.",
+    "source_summary": "A man owns a goose that lays a golden egg every day. Impatient to get all the gold at once, he kills the goose, only to lose the treasure-producing gift forever.",
+    "language": "en",
+    "status": "queued",
+    "publish_date": null,
+    "formats_needed": ["short", "full"]
+  }
+]

@@ -1,0 +1,64 @@
+name: panchatantra-weekly-automation
+description: Example weekly automation workflow for running the Panchatantra Studio pipeline.
+
+schedule:
+  cron: "0 9 * * MON"
+  timezone: "Asia/Kolkata"
+
+variables:
+  api_base_url: "http://127.0.0.1:8000"
+  webhook_secret: "${N8N_WEBHOOK_SECRET}"
+  default_language: "en"
+  publish_mode: "scheduled"
+
+steps:
+  - id: list_queue
+    type: http
+    method: GET
+    url: "${api_base_url}/stories"
+
+  - id: run_weekly_selection
+    type: http
+    method: POST
+    url: "${api_base_url}/webhooks/n8n/weekly"
+    headers:
+      x-webhook-secret: "${webhook_secret}"
+
+  - id: inspect_jobs
+    type: http
+    method: GET
+    url: "${api_base_url}/jobs"
+
+  - id: notify_success
+    type: log
+    level: info
+    message: "Weekly Panchatantra pipeline executed."
+
+manual_pipeline_example:
+  story_id: "lion-rabbit"
+  steps:
+    - method: POST
+      url: "${api_base_url}/generate/lion-rabbit"
+      body:
+        languages: ["${default_language}"]
+        formats: ["short", "full"]
+    - method: POST
+      url: "${api_base_url}/render/lion-rabbit"
+      body:
+        languages: ["${default_language}"]
+        formats: ["short", "full"]
+        burn_subtitles: true
+    - method: POST
+      url: "${api_base_url}/upload/lion-rabbit"
+      body:
+        languages: ["${default_language}"]
+        formats: ["short", "full"]
+        mode: "private"
+    - method: POST
+      url: "${api_base_url}/publish/lion-rabbit"
+      body:
+        languages: ["${default_language}"]
+        formats: ["short", "full"]
+        mode: "${publish_mode}"
+        scheduled_publish_at: "2026-03-31T03:30:00Z"
+

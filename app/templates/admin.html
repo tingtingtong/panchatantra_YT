@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page_title }}</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Panchatantra Studio</p>
+        <h1>{{ page_title }}</h1>
+        <p class="lede">Weekly bilingual story automation for Shorts and full-length uploads.</p>
+      </div>
+      <button class="primary" onclick="runWeekly()">Run Weekly Cycle</button>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Story Queue</h2>
+        <button onclick="refreshPage()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Language</th>
+              <th>Status</th>
+              <th>Formats</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for story in stories %}
+            <tr>
+              <td>{{ story.id }}</td>
+              <td>{{ story.title }}</td>
+              <td>{{ story.language }}</td>
+              <td>{{ story.status.value }}</td>
+              <td>{{ story.formats_needed | join(", ") }}</td>
+              <td class="actions">
+                <button onclick="postJson('/generate/{{ story.id }}', {})">Generate</button>
+                <button onclick="postJson('/render/{{ story.id }}', {})">Render</button>
+                <button onclick="postJson('/upload/{{ story.id }}', {'mode': 'private'})">Upload</button>
+                <button onclick="postJson('/publish/{{ story.id }}', {'mode': 'public'})">Publish</button>
+                <button onclick="openAssets('{{ story.id }}')">Assets</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Recent Jobs</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Story</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in jobs %}
+            <tr>
+              <td>{{ job.id }}</td>
+              <td>{{ job.story_id or '-' }}</td>
+              <td>{{ job.job_type }}</td>
+              <td>{{ job.status.value }}</td>
+              <td>{{ job.error_message or '-' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Response Console</h2>
+      </div>
+      <pre id="console">Ready.</pre>
+    </section>
+  </main>
+
+  <script>
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      document.getElementById('console').textContent = JSON.stringify(data, null, 2);
+      if (response.ok) {
+        setTimeout(() => window.location.reload(), 600);
+      }
+    }
+
+    async function runWeekly() {
+      const response = await fetch('/webhooks/n8n/weekly', {method: 'POST'});
+      const data = await response.json();
+      document.getElementById('console').textContent = JSON.stringify(data, null, 2);
+      if (response.ok) {
+        setTimeout(() => window.location.reload(), 600);
+      }
+    }
+
+    async function openAssets(storyId) {
+      const response = await fetch(`/assets/${storyId}`);
+      const data = await response.json();
+      document.getElementById('console').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function refreshPage() {
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>

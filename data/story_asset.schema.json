@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/panchatantra/story-asset.schema.json",
+  "title": "StoryAssetBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "story_id",
+    "language",
+    "format_type",
+    "target_duration_seconds",
+    "style_notes",
+    "script",
+    "shot_list",
+    "scene_prompts",
+    "subtitles",
+    "thumbnail",
+    "metadata"
+  ],
+  "properties": {
+    "story_id": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string",
+      "description": "ISO-like channel language code such as en or kn."
+    },
+    "format_type": {
+      "type": "string",
+      "enum": ["short", "full"]
+    },
+    "target_duration_seconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "style_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "script": {
+      "type": "string"
+    },
+    "shot_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/shotSpec"
+      }
+    },
+    "scene_prompts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/promptSpec"
+      }
+    },
+    "subtitles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/subtitleLine"
+      }
+    },
+    "thumbnail": {
+      "$ref": "#/$defs/thumbnailSpec"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadataSpec"
+    }
+  },
+  "$defs": {
+    "subtitleLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "text"],
+      "properties": {
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "shotSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scene_number",
+        "duration_seconds",
+        "visual_summary",
+        "camera_direction",
+        "emotion"
+      ],
+      "properties": {
+        "scene_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0.1
+        },
+        "visual_summary": {
+          "type": "string"
+        },
+        "camera_direction": {
+          "type": "string"
+        },
+        "emotion": {
+          "type": "string"
+        }
+      }
+    },
+    "promptSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene_number", "duration_seconds", "prompt", "negative_prompt"],
+      "properties": {
+        "scene_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0.1
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "negative_prompt": {
+          "type": "string"
+        }
+      }
+    },
+    "metadataSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "description", "tags", "cta_lines"],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cta_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "thumbnailSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headline", "prompt"],
+      "properties": {
+        "headline": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "image_path": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}
+
