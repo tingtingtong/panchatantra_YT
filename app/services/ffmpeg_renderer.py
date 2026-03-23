@@ -149,7 +149,7 @@ class FFmpegRenderer:
         duration: float,
     ) -> Path:
         image_path = output_path.with_suffix(".png")
-        self.video_generation_service.placeholder_provider._render_image(image_path, text, resolution)
+        self.video_generation_service.placeholder_provider.render_title_card_image(image_path, text, resolution)
         self._run(
             [
                 self.settings.ffmpeg_binary,
