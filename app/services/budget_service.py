@@ -27,30 +27,8 @@ class BudgetService:
             0.0,
         )
 
-        shorts_plan = self._build_format_plan(
-            BudgetTemplate(
-                format_type=FormatType.SHORT.value,
-                target_count_per_month=self.settings.monthly_shorts_target,
-                still_images_per_video=8,
-                hero_video_seconds_per_video=6,
-                recommendation=(
-                    "Use AI images for most shots. Reserve paid video generation for the first 2 seconds, one reaction shot, "
-                    "and the climax jump into the well."
-                ),
-            )
-        )
-        full_plan = self._build_format_plan(
-            BudgetTemplate(
-                format_type=FormatType.FULL.value,
-                target_count_per_month=self.settings.monthly_full_videos_target,
-                still_images_per_video=20,
-                hero_video_seconds_per_video=12,
-                recommendation=(
-                    "Keep the full video mostly image-motion based. Spend paid video seconds only on the hook, confrontation, "
-                    "and climax."
-                ),
-            )
-        )
+        shorts_plan = self._build_format_plan(self._template_for_format(FormatType.SHORT))
+        full_plan = self._build_format_plan(self._template_for_format(FormatType.FULL))
 
         projected_total_usd = shorts_plan.total_monthly_cost_usd + full_plan.total_monthly_cost_usd
         remaining_usd = available_production_budget_usd - projected_total_usd
@@ -82,6 +60,28 @@ class BudgetService:
 
     def recommend_priority(self, format_type: FormatType, scene_index: int, total_scenes: int) -> str:
         return "hero" if self.recommend_generation_mode(format_type, scene_index, total_scenes) == "video_ai" else "supporting"
+
+    def hero_video_seconds_per_video(self, format_type: FormatType) -> int:
+        template = self._template_for_format(format_type)
+        return template.hero_video_seconds_per_video
+
+    def recommend_generation_mode_for_shot(
+        self,
+        format_type: FormatType,
+        scene_index: int,
+        total_scenes: int,
+        duration_seconds: float,
+        allocated_hero_seconds: float,
+    ) -> str:
+        if self.recommend_generation_mode(format_type, scene_index, total_scenes) != "video_ai":
+            return "image_motion"
+        hero_limit = float(self.hero_video_seconds_per_video(format_type))
+        if allocated_hero_seconds >= hero_limit:
+            return "image_motion"
+        remaining = hero_limit - allocated_hero_seconds
+        if duration_seconds > remaining + 0.25:
+            return "image_motion"
+        return "video_ai"
 
     def estimate_scene_cost_usd(self, format_type: FormatType, generation_mode: str) -> float:
         if generation_mode == "video_ai":
@@ -120,6 +120,29 @@ class BudgetService:
             total_monthly_cost_usd=round(total_monthly_cost, 2),
             total_monthly_cost_inr=round(total_monthly_cost * self.settings.usd_to_inr_rate, 2),
             recommendation=template.recommendation,
+        )
+
+    def _template_for_format(self, format_type: FormatType) -> BudgetTemplate:
+        if format_type == FormatType.SHORT:
+            return BudgetTemplate(
+                format_type=FormatType.SHORT.value,
+                target_count_per_month=self.settings.monthly_shorts_target,
+                still_images_per_video=8,
+                hero_video_seconds_per_video=6,
+                recommendation=(
+                    "Use AI images for most shots. Reserve paid video generation for the first 2 seconds, one reaction shot, "
+                    "and the climax jump into the well."
+                ),
+            )
+        return BudgetTemplate(
+            format_type=FormatType.FULL.value,
+            target_count_per_month=self.settings.monthly_full_videos_target,
+            still_images_per_video=20,
+            hero_video_seconds_per_video=12,
+            recommendation=(
+                "Keep the full video mostly image-motion based. Spend paid video seconds only on the hook, confrontation, "
+                "and climax."
+            ),
         )
 
     @staticmethod

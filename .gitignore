@@ -13,6 +13,8 @@ tests/_tmp/
 .env
 
 data/panchatantra.db
+data/panchatantra.db-shm
+data/panchatantra.db-wal
 data/youtube_token.json
 data/youtube_client_secret.json
 

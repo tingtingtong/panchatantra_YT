@@ -7,10 +7,11 @@ import subprocess
 import textwrap
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from app.config import Settings
 from app.schemas import PromptSpec
@@ -46,6 +47,18 @@ class BaseVideoProvider(ABC):
         resolution: tuple[int, int],
     ) -> Path:
         raise NotImplementedError
+
+
+@dataclass(slots=True)
+class MotionPlan:
+    zoom_start: float
+    zoom_end: float
+    drift_x: int
+    drift_y: int
+    overlay_shift_x: int
+    overlay_shift_y: int
+    color_treatment: str
+    finish_filter: str
 
 
 class OpenAIVideoProvider(BaseVideoProvider):
@@ -177,7 +190,7 @@ class OpenAIImageProvider(BaseImageProvider):
         )
         style = (
             "Indian forest aesthetic, warm cinematic lighting, premium family-animation look, detailed foliage, atmospheric depth, "
-            "clear silhouettes, emotionally readable staging."
+            "volumetric light, layered foreground elements, expressive posing, clear silhouettes, emotionally readable staging."
         )
         return (
             f"{style} {orientation}. {continuity} {safety} "
@@ -198,9 +211,10 @@ class PlaceholderImageProvider(BaseImageProvider):
 
 
 class ImageAnimatedVideoProvider(BaseVideoProvider):
-    def __init__(self, settings: Settings, image_provider: BaseImageProvider) -> None:
+    def __init__(self, settings: Settings, image_provider: BaseImageProvider, illustrator: Illustrator | None = None) -> None:
         self.settings = settings
         self.image_provider = image_provider
+        self.illustrator = illustrator or Illustrator()
 
     def generate_scene_clip(
         self,
@@ -223,18 +237,26 @@ class ImageAnimatedVideoProvider(BaseVideoProvider):
     ) -> None:
         duration_seconds = prompt.duration_seconds
         frames = max(int(round(duration_seconds * 24)), 24)
-        zoom_speed = "0.0018" if prompt.priority == "hero" else "0.0012"
-        if resolution[1] <= resolution[0] and prompt.priority != "hero":
-            zoom_speed = "0.0008"
-        color_treatment = "eq=saturation=1.12:contrast=1.05:brightness=0.02" if prompt.priority == "hero" else "eq=saturation=1.08:contrast=1.03"
+        motion_plan = self._motion_plan(prompt, resolution)
+        overlay_path = output_path.with_name(f"{output_path.stem}_overlay.png")
+        self.illustrator.render_depth_overlay(overlay_path, prompt.prompt, resolution, prompt.priority)
+        base_width, base_height = self._scaled_resolution(resolution, 1.24 if prompt.priority == "hero" else 1.16)
+        overlay_width, overlay_height = self._scaled_resolution(resolution, 1.08 if prompt.priority == "hero" else 1.04)
+        zoom_step = max((motion_plan.zoom_end - motion_plan.zoom_start) / max(frames - 1, 1), 0.0001)
         filter_chain = (
-            f"scale={resolution[0]}:{resolution[1]},"
-            f"zoompan=z='min(zoom+{zoom_speed},1.14)':"
-            "x='iw/2-(iw/zoom/2)':"
-            "y='ih/2-(ih/zoom/2)':"
+            f"[0:v]scale={base_width}:{base_height},"
+            f"zoompan=z='if(lte(on,1),{motion_plan.zoom_start:.3f},min({motion_plan.zoom_end:.3f},zoom+{zoom_step:.5f}))':"
+            f"x='(iw-iw/zoom)/2+({motion_plan.drift_x}*(on/{frames}))':"
+            f"y='(ih-ih/zoom)/2+({motion_plan.drift_y}*(on/{frames}))':"
             f"d={frames}:s={resolution[0]}x{resolution[1]}:fps=24,"
-            f"{color_treatment},"
-            "format=yuv420p"
+            f"{motion_plan.color_treatment},"
+            "unsharp=5:5:0.75:3:3:0.0,"
+            "format=rgba[base];"
+            f"[1:v]scale={overlay_width}:{overlay_height},format=rgba[overlay_src];"
+            f"[base][overlay_src]overlay="
+            f"x='({resolution[0]}-{overlay_width})/2+({motion_plan.overlay_shift_x}*(t/{max(duration_seconds, 1.5):.3f}))':"
+            f"y='({resolution[1]}-{overlay_height})/2+({motion_plan.overlay_shift_y}*sin(t*0.8))':"
+            f"format=auto,{motion_plan.finish_filter},format=yuv420p"
         )
         command = [
             self.settings.ffmpeg_binary,
@@ -243,7 +265,11 @@ class ImageAnimatedVideoProvider(BaseVideoProvider):
             "1",
             "-i",
             str(image_path),
-            "-vf",
+            "-loop",
+            "1",
+            "-i",
+            str(overlay_path),
+            "-filter_complex",
             filter_chain,
             "-t",
             str(max(duration_seconds, 1.5)),
@@ -258,6 +284,63 @@ class ImageAnimatedVideoProvider(BaseVideoProvider):
         except FileNotFoundError as exc:
             raise RuntimeError("FFmpeg is required for scene clip generation.") from exc
 
+    @staticmethod
+    def _scaled_resolution(resolution: tuple[int, int], factor: float) -> tuple[int, int]:
+        width = max(int(round(resolution[0] * factor / 2) * 2), resolution[0])
+        height = max(int(round(resolution[1] * factor / 2) * 2), resolution[1])
+        return width, height
+
+    def _motion_plan(self, prompt: PromptSpec, resolution: tuple[int, int]) -> MotionPlan:
+        camera = prompt.prompt.lower()
+        horizontal_bias = -1 if prompt.scene_number % 2 == 0 else 1
+        is_vertical = resolution[1] > resolution[0]
+        if prompt.priority == "hero":
+            zoom_start = 1.04 if "wide" in camera else 1.07
+            zoom_end = 1.18 if "dynamic" in camera or "close-up" in camera else 1.15
+            drift_x = 42 * horizontal_bias
+            drift_y = -14 if is_vertical else -8
+            overlay_shift_x = -32 * horizontal_bias
+            overlay_shift_y = 9
+            color_treatment = "eq=saturation=1.16:contrast=1.08:brightness=0.025"
+            finish_filter = "vignette=PI/5:mode=backward,noise=alls=7:allf=t"
+        elif "dolly" in camera or "push" in camera:
+            zoom_start = 1.02
+            zoom_end = 1.11
+            drift_x = 24 * horizontal_bias
+            drift_y = -8 if is_vertical else -5
+            overlay_shift_x = -18 * horizontal_bias
+            overlay_shift_y = 6
+            color_treatment = "eq=saturation=1.11:contrast=1.04:brightness=0.012"
+            finish_filter = "vignette=PI/5.8:mode=backward,noise=alls=4:allf=t"
+        elif "reveal" in camera or "wide" in camera:
+            zoom_start = 1.0
+            zoom_end = 1.07
+            drift_x = 30 * horizontal_bias
+            drift_y = -4
+            overlay_shift_x = -14 * horizontal_bias
+            overlay_shift_y = 4
+            color_treatment = "eq=saturation=1.09:contrast=1.03"
+            finish_filter = "vignette=PI/6:mode=backward,noise=alls=3:allf=t"
+        else:
+            zoom_start = 1.01
+            zoom_end = 1.09
+            drift_x = 18 * horizontal_bias
+            drift_y = -6 if is_vertical else -4
+            overlay_shift_x = -12 * horizontal_bias
+            overlay_shift_y = 5
+            color_treatment = "eq=saturation=1.10:contrast=1.03"
+            finish_filter = "vignette=PI/6:mode=backward,noise=alls=3:allf=t"
+        return MotionPlan(
+            zoom_start=zoom_start,
+            zoom_end=zoom_end,
+            drift_x=drift_x,
+            drift_y=drift_y,
+            overlay_shift_x=overlay_shift_x,
+            overlay_shift_y=overlay_shift_y,
+            color_treatment=color_treatment,
+            finish_filter=finish_filter,
+        )
+
 
 class Illustrator:
     def render_scene_image(self, image_path: Path, prompt_text: str, resolution: tuple[int, int]) -> None:
@@ -267,18 +350,50 @@ class Illustrator:
         palette = self._pick_palette(prompt_text)
 
         canvas = Image.new("RGBA", (width, height), (*palette["sky_top"], 255))
-        draw = ImageDraw.Draw(canvas)
-        self._paint_gradient(draw, width, height, palette["sky_top"], palette["sky_bottom"])
-        self._draw_light_source(draw, width, height, palette, prompt_text)
-        self._draw_distant_hills(draw, width, height, palette)
-        self._draw_forest_layers(draw, width, height, palette)
-        self._draw_ground(draw, width, height, palette)
-        self._draw_scene_feature(draw, width, height, palette, prompt_text)
-        self._draw_characters(draw, width, height, palette, prompt_text)
-        self._draw_atmosphere(canvas, width, height, palette)
-        canvas = canvas.filter(ImageFilter.GaussianBlur(radius=0.35))
+        background = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        midground = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        characters = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        highlights = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+
+        self._paint_gradient(ImageDraw.Draw(canvas), width, height, palette["sky_top"], palette["sky_bottom"])
+        self._draw_light_source(ImageDraw.Draw(background), width, height, palette, prompt_text)
+        self._draw_distant_hills(ImageDraw.Draw(background), width, height, palette)
+        self._draw_forest_layers(ImageDraw.Draw(midground), width, height, palette)
+        self._draw_ground(ImageDraw.Draw(midground), width, height, palette)
+        self._draw_ground_texture(ImageDraw.Draw(midground), width, height, palette)
+        self._draw_scene_feature(ImageDraw.Draw(midground), width, height, palette, prompt_text)
+        self._draw_character_shadows(ImageDraw.Draw(midground), width, height, prompt_text)
+        self._draw_characters(ImageDraw.Draw(characters), width, height, palette, prompt_text)
+        self._draw_light_rays(highlights, width, height, palette, prompt_text)
+        self._draw_atmosphere(highlights, width, height, palette)
+        self._draw_edge_framing(ImageDraw.Draw(highlights), width, height, palette)
+
+        canvas.alpha_composite(background.filter(ImageFilter.GaussianBlur(radius=0.8)))
+        canvas.alpha_composite(midground)
+        canvas.alpha_composite(characters.filter(ImageFilter.GaussianBlur(radius=0.25)))
+        canvas.alpha_composite(highlights.filter(ImageFilter.GaussianBlur(radius=0.6)))
+        canvas = canvas.filter(ImageFilter.GaussianBlur(radius=0.25))
+        canvas = ImageEnhance.Color(canvas).enhance(1.08)
+        canvas = ImageEnhance.Contrast(canvas).enhance(1.05)
         image_path.parent.mkdir(parents=True, exist_ok=True)
         canvas.convert("RGB").save(image_path)
+
+    def render_depth_overlay(
+        self,
+        image_path: Path,
+        prompt_text: str,
+        resolution: tuple[int, int],
+        priority: str,
+    ) -> None:
+        width, height = resolution
+        palette = self._pick_palette(prompt_text)
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        self._draw_foreground_foliage(overlay_draw, width, height, palette, prompt_text, priority)
+        self._draw_depth_particles(overlay_draw, width, height, palette, priority)
+        self._draw_soft_vignette(overlay, width, height)
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        overlay.save(image_path)
 
     def render_title_card_image(self, image_path: Path, text: str, resolution: tuple[int, int]) -> None:
         width, height = resolution
@@ -287,6 +402,7 @@ class Illustrator:
         self._paint_gradient(draw, width, height, (22, 45, 39), (161, 107, 57))
         self._draw_distant_hills(draw, width, height, self._pick_palette("forest"))
         self._draw_forest_layers(draw, width, height, self._pick_palette("forest"))
+        self._draw_light_rays(canvas, width, height, self._pick_palette("forest"), "golden dawn forest")
         draw.rounded_rectangle(
             (int(width * 0.08), int(height * 0.12), int(width * 0.92), int(height * 0.88)),
             radius=int(min(width, height) * 0.04),
@@ -462,6 +578,46 @@ class Illustrator:
                 fill=(112, 83, 47),
             )
 
+    @staticmethod
+    def _draw_ground_texture(
+        draw: ImageDraw.ImageDraw,
+        width: int,
+        height: int,
+        palette: dict[str, tuple[int, int, int]],
+    ) -> None:
+        for index in range(14):
+            x = int((index * 97) % width)
+            y = int(height * 0.78) + (index % 4) * 18
+            draw.arc(
+                (x, y, x + int(width * 0.1), y + int(height * 0.08)),
+                start=180,
+                end=360,
+                fill=tuple(max(channel - 18, 0) for channel in palette["ground"]),
+                width=4,
+            )
+        for index in range(22):
+            x = int((index * 53) % width)
+            y = int(height * 0.74) + (index % 6) * 20
+            draw.line(
+                (x, y, x + 12, y - 20),
+                fill=(91, 121, 69, 160),
+                width=3,
+            )
+
+    @staticmethod
+    def _draw_character_shadows(
+        draw: ImageDraw.ImageDraw,
+        width: int,
+        height: int,
+        prompt_text: str,
+    ) -> None:
+        lowered = prompt_text.lower()
+        shadow_color = (38, 28, 20, 72)
+        if "lion" in lowered:
+            draw.ellipse((int(width * 0.12), int(height * 0.74), int(width * 0.43), int(height * 0.83)), fill=shadow_color)
+        if "rabbit" in lowered or "hare" in lowered:
+            draw.ellipse((int(width * 0.61), int(height * 0.8), int(width * 0.79), int(height * 0.87)), fill=shadow_color)
+
     def _draw_scene_feature(
         self,
         draw: ImageDraw.ImageDraw,
@@ -516,6 +672,115 @@ class Illustrator:
             self._draw_elephant(draw, int(width * 0.3), int(height * 0.77), int(min(width, height) * 0.16))
         if "serpent" in lowered or "snake" in lowered:
             self._draw_serpent(draw, int(width * 0.72), int(height * 0.82), int(min(width, height) * 0.1))
+
+    def _draw_light_rays(
+        self,
+        canvas: Image.Image,
+        width: int,
+        height: int,
+        palette: dict[str, tuple[int, int, int]],
+        prompt_text: str,
+    ) -> None:
+        lowered = prompt_text.lower()
+        if any(word in lowered for word in ("night", "moon", "dark")):
+            return
+        rays = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(rays)
+        for index in range(4):
+            left = int(width * (0.12 + index * 0.16))
+            draw.polygon(
+                [
+                    (left, 0),
+                    (left + int(width * 0.08), 0),
+                    (left + int(width * 0.2), int(height * 0.9)),
+                    (left - int(width * 0.02), int(height * 0.9)),
+                ],
+                fill=(*palette["accent"], 24 if index % 2 else 18),
+            )
+        canvas.alpha_composite(rays.filter(ImageFilter.GaussianBlur(radius=18)))
+
+    @staticmethod
+    def _draw_edge_framing(
+        draw: ImageDraw.ImageDraw,
+        width: int,
+        height: int,
+        palette: dict[str, tuple[int, int, int]],
+    ) -> None:
+        leaf_color = (*palette["canopy_dark"], 120)
+        draw.ellipse((-int(width * 0.18), int(height * 0.02), int(width * 0.18), int(height * 0.34)), fill=leaf_color)
+        draw.ellipse((int(width * 0.82), int(height * 0.06), int(width * 1.08), int(height * 0.38)), fill=leaf_color)
+        draw.ellipse((int(width * 0.72), int(height * 0.72), int(width * 1.05), int(height * 1.04)), fill=(*palette["ground"], 72))
+
+    @staticmethod
+    def _draw_foreground_foliage(
+        draw: ImageDraw.ImageDraw,
+        width: int,
+        height: int,
+        palette: dict[str, tuple[int, int, int]],
+        prompt_text: str,
+        priority: str,
+    ) -> None:
+        density = 6 if priority == "hero" else 4
+        alpha = 156 if priority == "hero" else 112
+        for index in range(density):
+            span = int(width * (0.18 if index % 2 else 0.13))
+            x = -int(width * 0.08) + index * int(width * 0.08)
+            y = int(height * (0.05 + index * 0.04))
+            draw.polygon(
+                [
+                    (x, y + span),
+                    (x + span, y),
+                    (x + span * 2, y + span * 2),
+                ],
+                fill=(*palette["canopy_dark"], alpha),
+            )
+        for index in range(density):
+            span = int(width * 0.12)
+            x = int(width * 0.78) + index * int(width * 0.05)
+            y = int(height * (0.02 + index * 0.05))
+            draw.ellipse(
+                (x, y, x + span, y + int(height * 0.18)),
+                fill=(*palette["canopy_mid"], alpha - 18),
+            )
+        if "well" in prompt_text.lower():
+            draw.ellipse(
+                (int(width * 0.48), int(height * 0.75), int(width * 0.92), int(height * 1.02)),
+                fill=(18, 31, 42, 52),
+            )
+
+    @staticmethod
+    def _draw_depth_particles(
+        draw: ImageDraw.ImageDraw,
+        width: int,
+        height: int,
+        palette: dict[str, tuple[int, int, int]],
+        priority: str,
+    ) -> None:
+        count = 48 if priority == "hero" else 24
+        for index in range(count):
+            x = int((index * 149) % width)
+            y = int((index * 89) % height)
+            radius = 4 + (index % 3) * 2
+            alpha = 42 if priority == "hero" else 24
+            draw.ellipse(
+                (x, y, x + radius, y + radius),
+                fill=(*palette["accent"], alpha),
+            )
+
+    @staticmethod
+    def _draw_soft_vignette(
+        canvas: Image.Image,
+        width: int,
+        height: int,
+    ) -> None:
+        vignette = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(vignette)
+        draw.ellipse(
+            (-int(width * 0.18), -int(height * 0.14), int(width * 1.18), int(height * 1.12)),
+            outline=(12, 14, 18, 56),
+            width=int(min(width, height) * 0.08),
+        )
+        canvas.alpha_composite(vignette.filter(ImageFilter.GaussianBlur(radius=26)))
 
     @staticmethod
     def _draw_lion(draw: ImageDraw.ImageDraw, x: int, y: int, size: int) -> None:
@@ -623,7 +888,7 @@ class VideoGenerationService:
             if settings.openai_api_key and settings.use_openai_image_generation
             else self.placeholder_image_provider
         )
-        self.animated_image_provider = ImageAnimatedVideoProvider(settings, self.image_provider)
+        self.animated_image_provider = ImageAnimatedVideoProvider(settings, self.image_provider, self.illustrator)
         self.openai_video_provider = OpenAIVideoProvider(settings)
 
     def generate_scene_clip(
@@ -650,5 +915,5 @@ class VideoGenerationService:
             )
         except Exception as exc:
             logger.warning("Primary image provider failed, falling back to local illustrated scenes: %s", exc)
-            fallback_provider = ImageAnimatedVideoProvider(self.settings, self.placeholder_image_provider)
+            fallback_provider = ImageAnimatedVideoProvider(self.settings, self.placeholder_image_provider, self.illustrator)
             return fallback_provider.generate_scene_clip(prompt=prompt, output_path=output_path, resolution=resolution)

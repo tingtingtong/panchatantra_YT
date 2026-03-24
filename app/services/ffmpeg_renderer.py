@@ -105,7 +105,7 @@ class FFmpegRenderer:
             command.extend(
                 [
                     "-vf",
-                    f"subtitles='{subtitle_filter}':force_style='FontName=Arial,FontSize=22,BorderStyle=3,Outline=1'",
+                    f"subtitles='{subtitle_filter}':force_style='{self._subtitle_style(bundle.format_type)}'",
                 ]
             )
 
@@ -161,13 +161,31 @@ class FFmpegRenderer:
                 "-t",
                 str(duration),
                 "-vf",
-                f"scale={resolution[0]}:{resolution[1]},format=yuv420p",
+                (
+                    f"scale={int(resolution[0] * 1.08)}:{int(resolution[1] * 1.08)},"
+                    f"zoompan=z='if(lte(on,1),1.02,min(1.1,zoom+0.0009))':"
+                    f"x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':"
+                    f"d={max(int(duration * 24), 24)}:s={resolution[0]}x{resolution[1]}:fps=24,"
+                    "eq=saturation=1.08:contrast=1.03,format=yuv420p"
+                ),
                 "-c:v",
                 "libx264",
                 str(output_path),
             ]
         )
         return output_path
+
+    @staticmethod
+    def _subtitle_style(format_type: FormatType) -> str:
+        if format_type == FormatType.SHORT:
+            return (
+                "FontName=Arial Bold,FontSize=28,PrimaryColour=&H00F7F6F2,BackColour=&H66000000,"
+                "OutlineColour=&H00242014,BorderStyle=4,Outline=2,Shadow=0,Alignment=2,MarginV=120"
+            )
+        return (
+            "FontName=Arial,FontSize=20,PrimaryColour=&H00F7F1E7,BackColour=&H4C000000,"
+            "OutlineColour=&H001A1109,BorderStyle=4,Outline=1,Shadow=0,Alignment=2,MarginV=46"
+        )
 
     def _create_background_music(self, path: Path, duration_seconds: int) -> None:
         sample_rate = 22050

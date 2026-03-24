@@ -142,6 +142,17 @@ class Settings(BaseSettings):
         winget_root = Path.home() / "AppData" / "Local" / "Microsoft" / "WinGet" / "Packages"
         if winget_root.exists():
             for directory in winget_root.glob("Gyan.FFmpeg*"):
+                for candidate in (
+                    directory / "ffmpeg-8.1-full_build" / "bin" / windows_binary_name,
+                    directory / "ffmpeg-master-latest-win64-gpl-shared" / "bin" / windows_binary_name,
+                    directory / "ffmpeg-master-latest-win64-gpl" / "bin" / windows_binary_name,
+                ):
+                    try:
+                        exists = candidate.exists()
+                    except PermissionError:
+                        return str(candidate)
+                    if exists:
+                        return str(candidate)
                 try:
                     matches = list(directory.rglob(windows_binary_name))
                 except PermissionError:

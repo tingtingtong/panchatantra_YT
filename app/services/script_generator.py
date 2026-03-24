@@ -64,28 +64,39 @@ class ScriptGenerator:
         cta_lines = payload.get("cta_lines") or self._fallback_cta(language, format_type)
         thumbnail_headline = payload.get("thumbnail_headline") or self._thumbnail_headline(story, language, format_type)
 
-        shot_list = [
-            ShotSpec(
-                scene_number=item.get("scene_number", index + 1),
-                duration_seconds=float(item.get("duration_seconds", target_duration / max(len(sections), 1))),
-                visual_summary=item.get("visual_summary", sections[index] if index < len(sections) else story.title),
-                camera_direction=item.get("camera_direction", "slow push-in"),
-                emotion=item.get("emotion", "wonder"),
-                generation_mode=self.budget_service.recommend_generation_mode(format_type, index, len(shot_list_payload)),
-                priority=self.budget_service.recommend_priority(format_type, index, len(shot_list_payload)),
-                estimated_cost_usd=round(
-                    self.budget_service.estimate_scene_cost_usd(
-                        format_type,
-                        self.budget_service.recommend_generation_mode(format_type, index, len(shot_list_payload)),
-                    )
-                    * float(item.get("duration_seconds", target_duration / max(len(sections), 1))),
+        shot_list: list[ShotSpec] = []
+        allocated_hero_seconds = 0.0
+        total_shots = len(shot_list_payload)
+        for index, item in enumerate(shot_list_payload):
+            duration_seconds = float(item.get("duration_seconds", target_duration / max(len(sections), 1)))
+            generation_mode = self.budget_service.recommend_generation_mode_for_shot(
+                format_type=format_type,
+                scene_index=index,
+                total_scenes=total_shots,
+                duration_seconds=duration_seconds,
+                allocated_hero_seconds=allocated_hero_seconds,
+            )
+            priority = "hero" if generation_mode == "video_ai" else "supporting"
+            if generation_mode == "video_ai":
+                allocated_hero_seconds += duration_seconds
+                estimated_cost_usd = round(
+                    self.budget_service.estimate_scene_cost_usd(format_type, generation_mode) * duration_seconds,
                     3,
                 )
-                if self.budget_service.recommend_generation_mode(format_type, index, len(shot_list_payload)) == "video_ai"
-                else round(self.budget_service.estimate_scene_cost_usd(format_type, "image_motion"), 3),
+            else:
+                estimated_cost_usd = round(self.budget_service.estimate_scene_cost_usd(format_type, generation_mode), 3)
+            shot_list.append(
+                ShotSpec(
+                    scene_number=item.get("scene_number", index + 1),
+                    duration_seconds=duration_seconds,
+                    visual_summary=item.get("visual_summary", sections[index] if index < len(sections) else story.title),
+                    camera_direction=item.get("camera_direction", "slow push-in"),
+                    emotion=item.get("emotion", "wonder"),
+                    generation_mode=generation_mode,
+                    priority=priority,
+                    estimated_cost_usd=estimated_cost_usd,
+                )
             )
-            for index, item in enumerate(shot_list_payload)
-        ]
         subtitles = self.subtitle_service.build_timed_lines(sections, target_duration_seconds=target_duration)
         prompts = self.prompt_generator.generate(story, format_type, language, shot_list)
         script = "\n\n".join(sections)

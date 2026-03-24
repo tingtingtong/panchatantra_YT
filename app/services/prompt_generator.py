@@ -24,7 +24,9 @@ class PromptGenerator:
             text = (
                 f"{story.title}. Scene {shot.scene_number}. {shot.visual_summary}. "
                 f"Emotion: {shot.emotion}. Camera: {shot.camera_direction}. "
-                f"{orientation}. {', '.join(self.style_notes)}. Language context: {language}."
+                f"{orientation}. {', '.join(self.style_notes)}. "
+                "Use layered depth, strong foreground framing, clear character silhouettes, and animated-feature-film lighting. "
+                f"Language context: {language}."
             )
             prompts.append(
                 PromptSpec(

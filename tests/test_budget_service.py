@@ -91,6 +91,20 @@ def test_budget_service_estimates_cost_modes() -> None:
     assert video_cost == settings.budget_runway_gen4_turbo_usd_per_second
 
 
+def test_budget_service_downgrades_hero_shot_when_duration_exceeds_budget() -> None:
+    service = BudgetService(Settings())
+
+    mode = service.recommend_generation_mode_for_shot(
+        format_type=FormatType.SHORT,
+        scene_index=0,
+        total_scenes=6,
+        duration_seconds=7.5,
+        allocated_hero_seconds=0.0,
+    )
+
+    assert mode == "image_motion"
+
+
 def test_budget_service_estimates_bundle_cost_with_hero_and_supporting_shots() -> None:
     settings = Settings(
         budget_openai_image_high_usd=0.052,
