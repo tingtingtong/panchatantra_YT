@@ -68,6 +68,9 @@ class ShotSpec(BaseModel):
     visual_summary: str
     camera_direction: str
     emotion: str
+    generation_mode: str = "image_motion"
+    priority: str = "supporting"
+    estimated_cost_usd: float | None = None
 
 
 class PromptSpec(BaseModel):
@@ -75,6 +78,9 @@ class PromptSpec(BaseModel):
     duration_seconds: float
     prompt: str
     negative_prompt: str = ""
+    generation_mode: str = "image_motion"
+    priority: str = "supporting"
+    estimated_cost_usd: float | None = None
 
 
 class MetadataSpec(BaseModel):
@@ -140,3 +146,33 @@ class StoryAssetsResponse(BaseModel):
 class AdminSummary(BaseModel):
     stories: list[StoryRead]
     jobs: list[JobRead]
+
+
+class BudgetFormatPlan(BaseModel):
+    format_type: str
+    target_count_per_month: int
+    still_images_per_video: int
+    hero_video_seconds_per_video: int
+    image_cost_per_video_usd: float
+    hero_video_cost_per_video_usd: float
+    total_cost_per_video_usd: float
+    total_monthly_cost_usd: float
+    total_monthly_cost_inr: float
+    recommendation: str
+
+
+class BudgetPlanResponse(BaseModel):
+    monthly_budget_inr: int
+    monthly_budget_usd: float
+    usd_to_inr_rate: float
+    llm_reserve_usd: float
+    contingency_reserve_usd: float
+    available_production_budget_usd: float
+    available_production_budget_inr: float
+    shorts: BudgetFormatPlan
+    full: BudgetFormatPlan
+    projected_total_usd: float
+    projected_total_inr: float
+    remaining_usd: float
+    remaining_inr: float
+    notes: list[str]

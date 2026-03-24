@@ -4,6 +4,7 @@ from typing import Any
 
 from app.models import FormatType, Story
 from app.schemas import ShotSpec, StoryAssetBundle, ThumbnailSpec
+from app.services.budget_service import BudgetService
 from app.services.llm_service import LLMService
 from app.services.metadata_service import MetadataService
 from app.services.prompt_generator import PromptGenerator
@@ -38,6 +39,7 @@ class ScriptGenerator:
         self.prompt_generator = prompt_generator
         self.subtitle_service = subtitle_service
         self.metadata_service = metadata_service
+        self.budget_service = BudgetService(llm_service.settings)
 
     def generate_bundle(self, story: Story, format_type: FormatType, language: str) -> StoryAssetBundle:
         target_duration = 45 if format_type == FormatType.SHORT else 360
@@ -69,6 +71,18 @@ class ScriptGenerator:
                 visual_summary=item.get("visual_summary", sections[index] if index < len(sections) else story.title),
                 camera_direction=item.get("camera_direction", "slow push-in"),
                 emotion=item.get("emotion", "wonder"),
+                generation_mode=self.budget_service.recommend_generation_mode(format_type, index, len(shot_list_payload)),
+                priority=self.budget_service.recommend_priority(format_type, index, len(shot_list_payload)),
+                estimated_cost_usd=round(
+                    self.budget_service.estimate_scene_cost_usd(
+                        format_type,
+                        self.budget_service.recommend_generation_mode(format_type, index, len(shot_list_payload)),
+                    )
+                    * float(item.get("duration_seconds", target_duration / max(len(sections), 1))),
+                    3,
+                )
+                if self.budget_service.recommend_generation_mode(format_type, index, len(shot_list_payload)) == "video_ai"
+                else round(self.budget_service.estimate_scene_cost_usd(format_type, "image_motion"), 3),
             )
             for index, item in enumerate(shot_list_payload)
         ]
@@ -203,4 +217,3 @@ class ScriptGenerator:
         return {
             "Intelligence and patience can defeat brute strength.": "ಜಾಣ್ಮೆ ಮತ್ತು ಸಹನೆ ದೌರ್ಜನ್ಯ ಬಲವನ್ನೂ ಸೋಲಿಸಬಲ್ಲವು.",
         }.get(moral, "ಶಾಂತವಾದ ಜಾಣ್ಮೆ ಬಲಕ್ಕಿಂತ ದೊಡ್ಡದಾಗಿದೆ.")
-

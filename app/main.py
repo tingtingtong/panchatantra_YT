@@ -15,7 +15,8 @@ from app.db import get_session, init_db
 from app.logging_utils import configure_logging
 from app.models import Story
 from app.scheduler import build_scheduler
-from app.schemas import GenerateRequest, PublishRequest, RenderRequest, StoryAssetsResponse, StoryCreate, StoryRead, UploadRequest
+from app.schemas import BudgetPlanResponse, GenerateRequest, PublishRequest, RenderRequest, StoryAssetsResponse, StoryCreate, StoryRead, UploadRequest
+from app.services.budget_service import BudgetService
 from app.services.pipeline_service import PipelineService
 
 settings = get_settings()
@@ -54,12 +55,14 @@ def root() -> RedirectResponse:
 def admin_page(request: Request, pipeline: PipelineService = Depends(get_pipeline)) -> HTMLResponse:
     stories = pipeline.list_stories()
     jobs = pipeline.list_jobs(limit=20)
+    budget_plan = BudgetService(settings).build_plan()
     return templates.TemplateResponse(
         "admin.html",
         {
             "request": request,
             "stories": stories,
             "jobs": jobs,
+            "budget_plan": budget_plan,
             "page_title": settings.admin_page_title,
         },
     )
@@ -165,6 +168,11 @@ def get_jobs(pipeline: PipelineService = Depends(get_pipeline)) -> list[dict]:
         }
         for job in pipeline.list_jobs()
     ]
+
+
+@app.get("/budget", response_model=BudgetPlanResponse)
+def get_budget_plan() -> BudgetPlanResponse:
+    return BudgetService(settings).build_plan()
 
 
 @app.get("/assets/{story_id}", response_model=StoryAssetsResponse)

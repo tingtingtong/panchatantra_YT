@@ -34,6 +34,7 @@ The system uses FastAPI for admin/API access, SQLite for local state, FFmpeg for
   - public
 - n8n-compatible weekly webhook trigger
 - CLI runner for a single story pipeline
+- Budget-mode planning for an `INR 3000/month` operating model
 
 ## Project Layout
 
@@ -211,6 +212,7 @@ An example external YAML workflow is provided at `data/weekly_workflow.yaml`.
 
 - `POST /stories`
 - `GET /stories`
+- `GET /budget`
 - `POST /generate/{story_id}`
 - `POST /render/{story_id}`
 - `POST /upload/{story_id}`
@@ -292,6 +294,12 @@ curl -X POST http://127.0.0.1:8000/webhooks/n8n/weekly \
   -H "x-webhook-secret: change-me"
 ```
 
+Fetch the recommended budget plan:
+
+```bash
+curl http://127.0.0.1:8000/budget
+```
+
 ## Output Files
 
 Typical generated files:
@@ -316,7 +324,7 @@ pytest
 
 ## Notes
 
+- The built-in budget mode assumes a practical low-cost mix of OpenAI scene images and a small amount of premium video generation reserved for hero shots.
 - The OpenAI video provider is implemented as a best-effort adapter and falls back to placeholder scene clips if it cannot complete.
 - The local TTS fallback intentionally generates placeholder narration audio for offline development.
 - For YouTube scheduling, the implementation maps `scheduled` to YouTube private upload with `publishAt`, which matches the YouTube API behavior.
-

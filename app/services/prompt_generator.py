@@ -32,7 +32,9 @@ class PromptGenerator:
                     duration_seconds=shot.duration_seconds,
                     prompt=text,
                     negative_prompt=self.negative_prompt,
+                    generation_mode=shot.generation_mode,
+                    priority=shot.priority,
+                    estimated_cost_usd=shot.estimated_cost_usd,
                 )
             )
         return prompts
-

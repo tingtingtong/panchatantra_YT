@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     max_retry_attempts: int = 3
     retry_base_delay_seconds: float = 1.5
 
+    monthly_budget_inr: int = 3000
+    usd_to_inr_rate: float = 91.0
+    monthly_shorts_target: int = 4
+    monthly_full_videos_target: int = 1
+    monthly_llm_reserve_usd: float = 4.0
+    monthly_contingency_reserve_usd: float = 4.0
+    budget_openai_image_high_usd: float = 0.052
+    budget_runway_gen4_turbo_usd_per_second: float = 0.05
+
     intro_duration_seconds: float = 3.0
     outro_duration_seconds: float = 4.0
     short_target_seconds: tuple[int, int] = Field(default=(35, 50))

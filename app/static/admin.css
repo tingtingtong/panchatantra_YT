@@ -40,6 +40,35 @@ body {
   margin-bottom: 24px;
 }
 
+.budget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.budget-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 247, 232, 0.06);
+  border: 1px solid rgba(247, 240, 220, 0.08);
+}
+
+.budget-card h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.budget-card p {
+  margin: 8px 0;
+  color: #e6dcc8;
+}
+
+.budget-number {
+  font-size: 30px;
+  font-weight: 700;
+  color: #f1c875;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: #f1c875;

@@ -19,6 +19,36 @@
 
     <section class="panel">
       <div class="panel-head">
+        <h2>Budget Mode</h2>
+        <button onclick="openBudget()">View JSON</button>
+      </div>
+      <div class="budget-grid">
+        <article class="budget-card">
+          <h3>Monthly Cap</h3>
+          <p class="budget-number">INR {{ budget_plan.monthly_budget_inr }}</p>
+          <p>Production budget: INR {{ budget_plan.available_production_budget_inr }}</p>
+          <p>Projected spend: INR {{ budget_plan.projected_total_inr }}</p>
+          <p>Remaining headroom: INR {{ budget_plan.remaining_inr }}</p>
+        </article>
+        <article class="budget-card">
+          <h3>Shorts</h3>
+          <p>{{ budget_plan.shorts.target_count_per_month }} per month</p>
+          <p>{{ budget_plan.shorts.still_images_per_video }} stills + {{ budget_plan.shorts.hero_video_seconds_per_video }} hero-video seconds each</p>
+          <p>Per Short: USD {{ budget_plan.shorts.total_cost_per_video_usd }}</p>
+          <p>Monthly: INR {{ budget_plan.shorts.total_monthly_cost_inr }}</p>
+        </article>
+        <article class="budget-card">
+          <h3>Full Videos</h3>
+          <p>{{ budget_plan.full.target_count_per_month }} per month</p>
+          <p>{{ budget_plan.full.still_images_per_video }} stills + {{ budget_plan.full.hero_video_seconds_per_video }} hero-video seconds each</p>
+          <p>Per full video: USD {{ budget_plan.full.total_cost_per_video_usd }}</p>
+          <p>Monthly: INR {{ budget_plan.full.total_monthly_cost_inr }}</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
         <h2>Story Queue</h2>
         <button onclick="refreshPage()">Refresh</button>
       </div>
@@ -119,6 +149,12 @@
 
     async function openAssets(storyId) {
       const response = await fetch(`/assets/${storyId}`);
+      const data = await response.json();
+      document.getElementById('console').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function openBudget() {
+      const response = await fetch('/budget');
       const data = await response.json();
       document.getElementById('console').textContent = JSON.stringify(data, null, 2);
     }
