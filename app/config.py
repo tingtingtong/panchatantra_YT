@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     monthly_contingency_reserve_usd: float = 4.0
     budget_openai_image_high_usd: float = 0.052
     budget_runway_gen4_turbo_usd_per_second: float = 0.05
+    enforce_story_budget: bool = True
+    budget_story_tolerance_usd: float = 0.5
 
     intro_duration_seconds: float = 3.0
     outro_duration_seconds: float = 4.0

@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.schemas import StoryAssetBundle
 from app.services.ffmpeg_renderer import FFmpegRenderer
+from app.services.budget_service import BudgetService
 from app.services.llm_service import LLMService
 from app.services.metadata_service import MetadataService
 from app.services.prompt_generator import PromptGenerator
@@ -53,6 +54,7 @@ class PipelineService:
         self.video_generation_service = VideoGenerationService(self.settings)
         self.renderer = FFmpegRenderer(self.settings, self.video_generation_service)
         self.youtube_service = YouTubeService(self.settings)
+        self.budget_service = BudgetService(self.settings)
 
     def generate_story(self, story_id: str, languages: list[str] | None = None, formats: list[FormatType] | None = None) -> list[StoryAsset]:
         story = self._require_story(story_id)
@@ -113,6 +115,7 @@ class PipelineService:
                 if not asset.asset_manifest_path:
                     raise ValueError(f"Asset {asset.id} has not been generated yet")
                 bundle = StoryAssetBundle.model_validate(json.loads(Path(asset.asset_manifest_path).read_text(encoding="utf-8")))
+                self._enforce_bundle_budget(bundle)
                 audio_path = self._audio_path(bundle)
                 tts_result = self.tts_service.synthesize(
                     bundle.script,
@@ -335,3 +338,14 @@ class PipelineService:
     def _render_path(self, bundle: StoryAssetBundle) -> Path:
         base_dir = self.settings.shorts_dir if bundle.format_type == FormatType.SHORT else self.settings.full_dir
         return base_dir / f"{bundle.story_id}_{bundle.language}_{bundle.format_type.value}.mp4"
+
+    def _enforce_bundle_budget(self, bundle: StoryAssetBundle) -> None:
+        if not self.settings.enforce_story_budget:
+            return
+        estimated = self.budget_service.estimate_bundle_cost_usd(bundle)
+        allowed = self.budget_service.allowed_bundle_cost_usd(bundle.format_type)
+        if estimated > allowed:
+            raise ValueError(
+                f"Estimated render cost ${estimated:.2f} exceeds the configured cap of ${allowed:.2f} "
+                f"for {bundle.format_type.value} videos."
+            )

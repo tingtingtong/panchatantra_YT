@@ -211,7 +211,7 @@ class ImageAnimatedVideoProvider(BaseVideoProvider):
     ) -> Path:
         image_path = output_path.with_suffix(".png")
         self.image_provider.generate_scene_image(prompt=prompt, output_path=image_path, resolution=resolution)
-        self._image_to_video(image_path, output_path, resolution, prompt.duration_seconds)
+        self._image_to_video(image_path, output_path, resolution, prompt)
         return output_path
 
     def _image_to_video(
@@ -219,17 +219,21 @@ class ImageAnimatedVideoProvider(BaseVideoProvider):
         image_path: Path,
         output_path: Path,
         resolution: tuple[int, int],
-        duration_seconds: float,
+        prompt: PromptSpec,
     ) -> None:
+        duration_seconds = prompt.duration_seconds
         frames = max(int(round(duration_seconds * 24)), 24)
-        zoom_speed = "0.0012" if resolution[1] > resolution[0] else "0.0008"
+        zoom_speed = "0.0018" if prompt.priority == "hero" else "0.0012"
+        if resolution[1] <= resolution[0] and prompt.priority != "hero":
+            zoom_speed = "0.0008"
+        color_treatment = "eq=saturation=1.12:contrast=1.05:brightness=0.02" if prompt.priority == "hero" else "eq=saturation=1.08:contrast=1.03"
         filter_chain = (
             f"scale={resolution[0]}:{resolution[1]},"
             f"zoompan=z='min(zoom+{zoom_speed},1.14)':"
             "x='iw/2-(iw/zoom/2)':"
             "y='ih/2-(ih/zoom/2)':"
             f"d={frames}:s={resolution[0]}x{resolution[1]}:fps=24,"
-            "eq=saturation=1.08:contrast=1.03,"
+            f"{color_treatment},"
             "format=yuv420p"
         )
         command = [
@@ -629,7 +633,7 @@ class VideoGenerationService:
         output_path: Path,
         resolution: tuple[int, int],
     ) -> Path:
-        if self.settings.openai_api_key and self.settings.use_openai_video_generation:
+        if prompt.generation_mode == "video_ai" and self.settings.openai_api_key and self.settings.use_openai_video_generation:
             try:
                 return self.openai_video_provider.generate_scene_clip(
                     prompt=prompt,

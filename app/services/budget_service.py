@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.models import FormatType
-from app.schemas import BudgetFormatPlan, BudgetPlanResponse
+from app.schemas import BudgetFormatPlan, BudgetPlanResponse, StoryAssetBundle
 
 
 @dataclass(slots=True)
@@ -89,6 +89,20 @@ class BudgetService:
         if format_type == FormatType.SHORT:
             return self.settings.budget_openai_image_high_usd
         return self.settings.budget_openai_image_high_usd
+
+    def estimate_bundle_cost_usd(self, bundle: StoryAssetBundle) -> float:
+        total = 0.0
+        for prompt in bundle.scene_prompts:
+            if prompt.generation_mode == "video_ai":
+                total += prompt.duration_seconds * self.settings.budget_runway_gen4_turbo_usd_per_second
+            else:
+                total += self.settings.budget_openai_image_high_usd
+        return round(total, 2)
+
+    def allowed_bundle_cost_usd(self, format_type: FormatType) -> float:
+        plan = self.build_plan()
+        target = plan.shorts if format_type == FormatType.SHORT else plan.full
+        return round(target.total_cost_per_video_usd + self.settings.budget_story_tolerance_usd, 2)
 
     def _build_format_plan(self, template: BudgetTemplate) -> BudgetFormatPlan:
         image_cost_per_video = template.still_images_per_video * self.settings.budget_openai_image_high_usd
