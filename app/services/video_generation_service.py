@@ -147,9 +147,6 @@ class OpenAIImageProvider(BaseImageProvider):
                 prompt=rendered_prompt,
                 size=size,
                 quality=self.settings.openai_image_quality,
-                style=self.settings.openai_image_style,
-                response_format="b64_json",
-                output_format="png",
             )
             if not response.data:
                 raise RuntimeError("OpenAI image response did not contain any image data.")
